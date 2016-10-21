@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Пятнашки</title>
+    <script type="text/javascript" src="cocos2d-js-v3.8.js" charset="UTF-8"></script>
+     <meta charset="UTF-8">
+</head>
+<body>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <script type="text/javascript">
+        //Functions
+        function drawGameField(gField, numbers){
+            for(var j=0;j<4;j++){
+                for (var i=0;i<4;i++){
+                    var k = gField[i][j];
+                    if(k != 0){
+                        var actionTo = cc.moveTo(0.1, cc.p(getX(j),getY(i)));
+                        numbers[k].stopAllActions();
+                        numbers[k].runAction(actionTo);
+                    }
+                }
+            }
+        }
+
+        function isWin(gField){
+            var winField = [[1,2,3,4],[5,6,7,8],[9,10,11,12],[13,14,15,0]];
+            for(var j=0;j<4;j++){
+                for (var i=0;i<4;i++){
+                    if (gField[i][j] != winField[i][j]){
+                        return false;
+                    }
+                }
+            }
+            return true;
+        }
+
+        function getMoveDirection(gField, num){
+            for(var j=0;j<4;j++){
+                for (var i=0;i<4;i++){
+                    if (gField[i][j] == num){
+                        if (i>0 && gField[i-1][j] == 0){
+                            return 3;
+                        }
+                        if (i<3 && gField[i+1][j] == 0){
+                            return 4;
+                        }
+                        if (j>0 && gField[i][j-1] == 0){
+                            return 1;
+                        }
+                        if (j<3 && gField[i][j+1] == 0){
+                            return 2;
+                        }
+                    }
+                }
+            }
+            return -1;
+        }
+
+        function shiftElement(gField, currentFreePos, direction){
+            switch(direction){
+                case 1: //left
+                    if (currentFreePos.y == 3){
+                        return;
+                    }else{
+                        gField[currentFreePos.x][currentFreePos.y] = gField[currentFreePos.x][currentFreePos.y + 1];
+                        currentFreePos.y++;
+                    }
+                    break;
+                case 2: //right
+                    if (currentFreePos.y == 0){
+                        return;
+                    }else{
+                        gField[currentFreePos.x][currentFreePos.y] = gField[currentFreePos.x][currentFreePos.y - 1];
+                        currentFreePos.y--;
+                    }
+                    break;
+                case 3: //up
+                    if (currentFreePos.x == 3){
+                        return;
+                    }else{
+                        gField[currentFreePos.x][currentFreePos.y] = gField[currentFreePos.x + 1][currentFreePos.y];
+                        currentFreePos.x++;
+                    }
+                    break;
+                case 4: //down
+                    if (currentFreePos.x == 0){
+                        return;
+                    }else{
+                        gField[currentFreePos.x][currentFreePos.y] = gField[currentFreePos.x - 1][currentFreePos.y];
+                        currentFreePos.x--;
+                    }
+                    break;
+                default:
+                    return;
+            }
+            gField[currentFreePos.x][currentFreePos.y] = 0;
+        }
+
+        function shuffleNumbers(gField, currentFreePos, iterations){
+            for (var i=0;i<iterations;i++){ //May be not cool, but this is guarantee shiftElement puzzle will be assembled.
+                var direction = Math.floor(Math.random() *4) + 1; //random direction
+                shiftElement(gField, currentFreePos, direction);
+            }
+        }
+
+        function getX(x){
+            return (212.5+125*x);
+        }
+
+        function getY(y){
+            return (487.5-125*y);
+        }
+
+        //Main
+          window.onload = function(){
+              cc.game.onStart = function(){
+                  //load resources
+                  cc.LoaderScene.preload(["game_field.png","num1.png","num2.png","num3.png","num4.png",
+                                                           "num5.png","num6.png","num7.png","num8.png",
+                                                           "num9.png","num10.png","num11.png","num12.png",
+                                                           "num13.png","num14.png","num15.png",
+                                           "sound_on.png", "sound_off.png", "restart.png"], function () {
+                      var MyScene = cc.Scene.extend({
+                          onEnter:function () {
+                              this._super();
+
+                              var origin = cc.director.getVisibleOrigin();
+                              var size = cc.director.getWinSize();
+                              cc.audioEngine.setEffectsVolume(0.5);
+                              var seStatus = true;
+
+                              //Add game field sprite
+                              var sprite = cc.Sprite.create("game_field.png");
+                              sprite.setPosition(size.width/2, size.height/2);
+                              this.addChild(sprite, 0);
+
+                              //Add number sprites
+                              var numbers = new Array(15);
+                              for (var i=1; i<=15; i++){
+                                  numbers[i]=cc.Sprite.create("num"+i+".png");
+                                  numbers[i].setName(i);
+                                  this.addChild(numbers[i], 1);
+                              }
+
+                              //Add header label
+                              var label = cc.LabelTTF.create("Пятнашки", "Arial", 40);
+                              label.setPosition(size.width/2, size.height - 25);
+                              label.setColor("000000ff");
+                              this.addChild(label, 2);
+
+                              //Add status labels
+                              var statusLabel = new cc.LabelTTF("Попробуй собрать эту головоломку!", "", 20);
+                              statusLabel.setPosition(origin.x + size.width/2, 20);
+                              statusLabel.setColor("000000ff");
+                              this.addChild(statusLabel, 2);
+
+                              var countMovesLabel = new cc.LabelTTF("Ходов: 0", "", 20);
+                              countMovesLabel.setPosition(size.width - 75, 75);
+                              countMovesLabel.setColor("000000ff");
+                              this.addChild(countMovesLabel, 2);
+
+                              //Add sound effects on/off control sprites
+                              var seOn = cc.Sprite.create("sound_on.png");
+                              seOn.setPosition(size.width - 40, 35);
+                              seOn.setScale(0.75);
+                              var seOff = cc.Sprite.create("sound_off.png");
+                              seOff.setPosition(size.width + 40, 35);
+                              seOff.setScale(0.75);
+                              this.addChild(seOn, 2);
+                              this.addChild(seOff, 2);
+                              //Add restart control sprite
+                              var restartBtn = cc.Sprite.create("restart.png");
+                              restartBtn.setPosition(size.width - 100, 35);
+                              restartBtn.setScale(0.75);
+                              this.addChild(restartBtn, 2);
+
+                              //Init game logic
+                              var gField = [[1,2,3,4],[5,6,7,8],[9,10,11,12],[13,14,15,0]];
+                              var currentFreePos = {x:3,y:3};
+                              shuffleNumbers(gField, currentFreePos, 1000);
+                              drawGameField(gField, numbers);
+                              var countMoves = 0;
+
+                              // Make num1 touchable
+                              var listener1 = cc.EventListener.create({
+                                  event: cc.EventListener.TOUCH_ONE_BY_ONE,
+                                  onTouchBegan: function(touch, event){
+                                      var pos = touch.getLocation(), target = event.getCurrentTarget();
+                                      var locationInNode = target.convertToNodeSpace(pos);
+                                      var s = target.getContentSize();
+                                      var rect = cc.rect(0, 0, s.width, s.height);
+
+                                      if (cc.rectContainsPoint(rect, locationInNode)) {
+                                          target.setScale(1.1);
+                                          var num = parseInt(target.getName());
+                                          var direction = getMoveDirection(gField, num);
+                                          if (direction != -1){
+                                              shiftElement(gField, currentFreePos, direction);
+                                              drawGameField(gField, numbers);
+                                              countMoves++;
+                                              countMovesLabel.setString("Ходов: "+countMoves);
+                                              cc.audioEngine.playEffect("tm2_switch000.wav");
+                                          }
+                                          return true;
+                                      }
+                                      return false;
+                                  },
+                                  onTouchEnded: function(touch, event){
+                                      var target = event.getCurrentTarget();
+                                      target.setScale(1);
+                                      if (isWin(gField) == true){
+                                          statusLabel.setString("Вы выиграли!");
+                                      }
+                                  }
+                              });
+                              cc.eventManager.addListener(listener1, numbers[1]);
+                              for (var i=2; i<16;i++){
+                                  cc.eventManager.addListener(listener1.clone(), numbers[i]);
+                              }
+                              var listener2 = cc.EventListener.create({
+                                  event: cc.EventListener.TOUCH_ONE_BY_ONE,
+                                  onTouchBegan: function(touch, event){
+                                      var pos = touch.getLocation(), target = event.getCurrentTarget();
+                                      var locationInNode = target.convertToNodeSpace(pos);
+                                      var s = target.getContentSize();
+                                      var rect = cc.rect(0, 0, s.width, s.height);
+
+                                      if (cc.rectContainsPoint(rect, locationInNode)) {
+                                          seStatus = !seStatus;
+                                          target.setScale(1);
+                                          return true;
+                                      }
+                                      return false;
+                                  },
+                                  onTouchEnded: function(touch, event){
+                                      var target = event.getCurrentTarget();
+                                      cc.audioEngine.setEffectsVolume(seStatus == true ? 0.5 : 0);
+                                      seOn.setPosition(seStatus == true ? size.width - 40 : size.width + 35, 35);
+                                      seOff.setPosition(seStatus == false ? size.width - 40 : size.width + 35, 35);
+                                      target.setScale(0.75);
+                                  }
+                              });
+                              cc.eventManager.addListener(listener2, seOn);
+                              cc.eventManager.addListener(listener2.clone(), seOff);
+
+                              var listener3 = cc.EventListener.create({
+                                  event: cc.EventListener.TOUCH_ONE_BY_ONE,
+                                  onTouchBegan: function(touch, event){
+                                      var pos = touch.getLocation(), target = event.getCurrentTarget();
+                                      var locationInNode = target.convertToNodeSpace(pos);
+                                      var s = target.getContentSize();
+                                      var rect = cc.rect(0, 0, s.width, s.height);
+
+                                      if (cc.rectContainsPoint(rect, locationInNode)) {
+                                          target.setScale(1);
+                                          return true;
+                                      }
+                                      return false;
+                                  },
+                                  onTouchEnded: function(touch, event){
+                                      var target = event.getCurrentTarget();
+                                      shuffleNumbers(gField, currentFreePos, 1000);
+                                      drawGameField(gField, numbers);
+                                      countMoves = 0;
+                                      countMovesLabel.setString("Ходов: "+countMoves);
+                                      target.setScale(0.75);
+                                  }
+                              });
+                              cc.eventManager.addListener(listener3, restartBtn);
+
+                          }
+                      });
+                      cc.director.runScene(new MyScene());
+                  }, this);
+              };
+              cc.game.run("gameCanvas");
+          };
+    </script>
+</body>
+</html>
